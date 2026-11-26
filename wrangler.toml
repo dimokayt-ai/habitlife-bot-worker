@@ -1,0 +1,10 @@
+name = "habitlife-bot-worker"
+main = "src/index.js"
+compatibility_date = "2026-11-26"
+
+[[kv_namespaces]]
+binding = "HL_DATA"
+id = "REPLACE_WITH_KV_ID"
+
+[vars]
+WEBAPP_URL = "https://dimokayt-ai.github.io/habitlife-admin-web/"
