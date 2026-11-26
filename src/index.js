@@ -15,8 +15,9 @@ const kb = u => ({ inline_keyboard: [
 ]});
 const card = u => '👤 <b>' + u.email + '</b>\nРоль: ' + (u.role === 'admin' ? '🛡 admin' : 'user') +
   '\nСтатус: ' + (u.blocked ? '⛔ заблокирован' : '✅ активен') + '\nСканирования: ' + (u.scans_used || 0) + '/' + (u.scans_limit || 6);
-async function getUsers(env) { return JSON.parse((await env.HL_DATA.get('users')) || '{}'); }
-async function saveUsers(env, users) { await env.HL_DATA.put('users', JSON.stringify(users)); }
+const USERS = { 'dimokayt@gmail.com': { email:'dimokayt@gmail.com', name:'Admin', role:'admin', blocked:false, scans_limit:50, scans_used:0 } };
+async function getUsers(env) { return USERS; }
+async function saveUsers(env, users) { }
 function admins(env) { return (env.ADMIN_TG_IDS || ADMINS_DEFAULT.join(',')).split(',').map(s => s.trim()); }
 function ensure(users, e) { e = norm(e); if (!users[e]) users[e] = { email: e, name: '', role: 'user', blocked: false, scans_limit: 6, scans_used: 0 }; return users[e]; }
 async function send(env, chat, text, extra = {}) {
