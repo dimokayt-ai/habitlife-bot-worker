@@ -1,3 +1,5 @@
+const PLANS={week:{amount:'20.00',days:7,scans:35},month:{amount:'49.00',days:30,scans:150},quarter:{amount:'119.00',days:90,scans:450},year:{amount:'399.00',days:365,scans:1800}};
+const PAID=new Set();
 const ADMINS_DEFAULT = ['7001764913','8634323012'];
 async function tg(env, method, body) {
   const r = await fetch('https://api.telegram.org/bot' + env.BOT_TOKEN + '/' + method, {
@@ -96,6 +98,48 @@ export default {
       const u = await request.json();
       try { if (u.message) await handleMessage(env, u.message); if (u.callback_query) await handleCallback(env, u.callback_query); } catch (e) { console.error(e); }
       return new Response('ok', { headers: cors });
+    }
+
+    if (url.pathname === '/api/pay') {
+      const plan = PLANS[url.searchParams.get('plan')];
+      if (!plan) return new Response(JSON.stringify({error:'unknown_plan'}), {headers:Object.assign({'Content-Type':'application/json'},cors)});
+      if (!env.YOOKASSA_SHOP_ID || !env.YOOKASSA_SECRET) return new Response(JSON.stringify({error:'provider_not_configured'}), {headers:Object.assign({'Content-Type':'application/json'},cors)});
+      const body = {
+        amount: { value: plan.amount, currency: 'RUB' },
+        capture: true,
+        confirmation: { type: 'redirect', return_url: url.origin.replace(/\.workers\.dev/, '.workers.dev') + '/paid' },
+        description: 'HabitLife Premium ' + url.searchParams.get('plan'),
+        metadata: { email: norm(url.searchParams.get('email') || ''), plan: url.searchParams.get('plan') }
+      };
+      const r = await fetch('https://api.yookassa.ru/v3/payments', {
+        method:'POST',
+        headers: { 'Content-Type':'application/json', 'Idempotence-Key': crypto.randomUUID(),
+          Authorization: 'Basic ' + btoa(env.YOOKASSA_SHOP_ID + ':' + env.YOOKASSA_SECRET) },
+        body: JSON.stringify(body)
+      });
+      const j = await r.json();
+      return new Response(JSON.stringify({url: j.confirmation?.confirmation_url || null, id: j.id}), {headers:Object.assign({'Content-Type':'application/json'},cors)});
+    }
+    if (url.pathname === '/payments/yookassa' && request.method === 'POST') {
+      const ev = await request.json();
+      const id = ev?.object?.id;
+      if (!id || PAID.has(id)) return new Response('ok', {headers:cors});
+      const r = await fetch('https://api.yookassa.ru/v3/payments/' + id, {
+        headers: { Authorization: 'Basic ' + btoa(env.YOOKASSA_SHOP_ID + ':' + env.YOOKASSA_SECRET) }
+      });
+      const p = await r.json();
+      if (p.status === 'succeeded' && p.paid === true) {
+        PAID.add(id);
+        const email = norm(p.metadata?.email || '');
+        const plan = PLANS[p.metadata?.plan];
+        if (email && plan) {
+          const u = ensure(USERS, email);
+          u.role = 'admin';
+          u.scans_limit = plan.scans;
+          u.premium_until = new Date(Date.now() + plan.days * 86400000).toISOString();
+        }
+      }
+      return new Response('ok', {headers:cors});
     }
     if (url.pathname === '/api/users') {
       const users = await getUsers(env);
